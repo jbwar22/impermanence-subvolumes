@@ -1,7 +1,7 @@
 # impermanence-subvolumes
 My highly opinionated implementation of impermanence, using btrfs.
 
-## Implementation:
+## Implementation
 - For use with a tmpfs root (not configured in this module)
 - Btrfs subvolume for each mountpoint
 - Bind mount for individual files
@@ -11,11 +11,11 @@ My highly opinionated implementation of impermanence, using btrfs.
   - For example, complete separation of persistant data you wish to back up, vs data you don't care about backing up, and/or control over what device persistant data lives in
 - Check script to ensure volumes are all present
 
-## Rationale:
+## Rationale
 Bind mounted directories were causing high CPU overhead during intense I/O, so I moved to using pure btrfs subvolume mounts.
 
 
-## Usage:
+## Usage
 in flake inputs:
 ```
 impermanence-subvolumes = {
@@ -23,15 +23,69 @@ impermanence-subvolumes = {
     inputs.nixpkgs.follows = "nixpkgs-stable";
 };
 ```
+### nixos module
 add the nixos module:
 ```
 inputs.impermanence-subvolumes.nixosModules.impermanence-subvolumes
 ```
+and configure:
+```
+environment.impermanence-subvolumes = {
+  enable = true;
+  defaultOrigin = "back"; # default origin for paths defined with just a string
+  devices = [
+    {
+      device = "/dev/disk/..."; # device file
+      subvol = "/"; # subvol where origins are located directly under
+      mntPoint = "/persist"; # where to mount the device
+      mntOptions = [ ... ]; # options to mount with
+      origins = [
+        {
+          path = "back/root"; # where the root folder is for this origin on the device
+          label = "back"; # for identifying (defaultOrigin and paths)
+        }
+        {
+          path = "local/root";
+          label = "local";
+        }
+        ...
+      ]
+    }
+    ...
+  ];
+  paths = [
+    "/var/lib/nixos" # simple path on default origin
+    { path = "/etc/ssh"; neededForBoot = true; } # mark as needed for boot
+    { path = "/var/log"; origin = "local"; } # mark from a different origin
+    { path = "/etc/localtime"; file = true; } # individual file mount
+  ];
+}
+```
+this would require the following disk layout:
+```
+/dev/disk/... (btrfs partition)
+  subvol: /  
+    back
+      root
+        var
+          lib
+            nixos # SUBVOLUME
+        etc
+          ssh # SUBVOLUME
+          localtime # FILE
+    local
+      root
+        var
+          log # SUBVOLUME
+```
+
+### home-manager module
 optionally add the home-manager module for user-defined mounts.
 Only compatible with home-manager as a nixos module, and only does anything if you have the nixos module installed too.
 ```
 inputs.impermanence-subvolumes.homeManagerModules.impermanence-subvolumes
 ```
+Then you can just define `environment.impermanence.subvolumes.paths`, and paths will be relative to your home folder.
 
 ## Check script
 Add the check script to flake outputs:
