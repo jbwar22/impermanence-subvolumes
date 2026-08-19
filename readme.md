@@ -88,13 +88,13 @@ inputs.impermanence-subvolumes.homeManagerModules.impermanence-subvolumes
 Then you can just define `environment.impermanence.subvolumes.paths`, with paths relative to your home folder.
 The NixOS module will automatically detect configured users' paths and include them in the system impermanence paths list
 
-## Check script
+## Check Script
 Override the impermanence-check package output with your nixosConfigurations to build the impermanence check script
 ```
 inputs.impermanence-subvolumes.packages."x86_64-linux".impermanence-check.override { nixosConfigurations = self.nixosConfigurations; }
 ```
 then you can run:
 ```
-impermanence-check HOSTNAME
+sudo impermanence-check HOSTNAME
 ```
 to check current mounted volumes against the HOSTNAME nixosConfiguration
