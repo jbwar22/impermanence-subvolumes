@@ -1,7 +1,30 @@
 { config, lib, ... }:
 
-with lib; let
-  cfg = config.environment.impermanence-subvolumes;
+let
+  inherit (lib)
+  attrsToList
+  dropEnd
+  filter
+  findFirst
+  flatten
+  foldl
+  getAttrFromPath
+  hasAttr
+  last
+  listToAttrs
+  mkEnableOption
+  mkIf
+  mkMerge
+  mkOption
+  pipe
+  setAttrByPath
+  splitString
+  typeOf
+  types
+  unique;
+  configPath = [ "environment" "impermanence-subvolumes" ];
+  cfg = getAttrFromPath configPath config;
+  opt = setAttrByPath configPath;
   mkStrOption = description: mkOption {
     inherit description;
     type = types.str;
@@ -65,8 +88,8 @@ in {
         paths = user.value.environment.impermanence-subvolumes.paths;
       }))
     ] else [];
-  in mkMerge [
-    (mkIf cfg.enable {
+  in mkIf cfg.enable (mkMerge [
+    {
       fileSystems = mkMerge [
         (pipe cfg.devices [
           (map (device: {
@@ -129,16 +152,15 @@ in {
         ]))
         flatten
       ];
-
-      environment.impermanence-subvolumes = {
-        paths = (mkMerge (map (userConf: 
-          map (x: {
-            inherit (x) file neededForBoot;
-            origin = mkIf (x.origin != null) x.origin;
-            path = "/home/${userConf.username}/${x.path}";
-          }) userConf.paths
-        ) userConfs));
-      };
+    }
+    (opt {
+      paths = (mkMerge (map (userConf: 
+        map (x: {
+          inherit (x) file neededForBoot;
+          origin = mkIf (x.origin != null) x.origin;
+          path = "/home/${userConf.username}/${x.path}";
+        }) userConf.paths
+      ) userConfs));
     })
-  ];
+  ]);
 }

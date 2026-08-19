@@ -1,6 +1,12 @@
 { lib, ... }:
 
-with lib; {
+let
+  inherit (lib)
+  mkEnableOption
+  mkOption
+  typeOf
+  types;
+in {
   options.environment.impermanence-subvolumes = {
     enable = mkEnableOption "home impermanence-subvolumes";
     paths = mkOption {
