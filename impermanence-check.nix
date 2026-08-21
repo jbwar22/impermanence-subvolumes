@@ -3,6 +3,7 @@
 
   btrfs-progs,
   coreutils,
+  findutils,
   gawk,
   hostname,
   writeShellScriptBin,
@@ -18,11 +19,10 @@ let
   concatMapStringsSep
   concatStringsSep
   filter
-  filterAttrs
   flatten
   head
-  length
   imap0
+  length
   pipe;
 
   loadRawSubvolumes = cfg: concatMapStringsSep "\n" (device: ''
@@ -39,13 +39,21 @@ let
     ))
     flatten
     (map (prefix: ''
-      mapfile -t -O "''${#subvols[@]}" subvols < <( \
+      mapfile -t -O "''${#realpaths[@]}" realpaths < <( \
         ${coreutils}/bin/printf "%s\n" "''${subvolsraw[@]}" \
         | ${gawk}/bin/awk -v s="${prefix}" 'index($0, s) == 1' \
       )
     ''))
     (concatStringsSep "\n")
   ];
+
+  loadFiles = cfg: concatMapStringsSep "\n" (device:
+    (concatMapStringsSep "\n" (origin: ''
+      mapfile -t -O "''${#realpaths[@]}" realpaths < <( \
+        ${findutils}/bin/find ${device.mntPoint}/${origin.path} -xdev -type f \
+      )
+    '') device.origins)
+  ) cfg.devices;
 
   getOriginPrefix = cfg: find-origin: pipe cfg.devices [
     (map (device: pipe device.origins [
@@ -56,10 +64,9 @@ let
     head
   ];
 
-  loadMounts = cfg: pipe cfg.paths [
-    (filter (path: !path.file))
+  loadCfgPaths = cfg: pipe cfg.paths [
     (imap0 (i: path: ''
-      mounts[${toString i}]="${getOriginPrefix cfg path.origin}${path.path}"
+      cfgpaths[${toString i}]="${getOriginPrefix cfg path.origin}${path.path}"
     ''))
     (concatStringsSep "\n")
   ];
@@ -103,19 +110,20 @@ in writeShellScriptBin "impermanence-check" ''
   ${hostnameWarnings}
   declare -a subvolsraw
   ${mkIfHostname loadRawSubvolumes}
-  declare -a subvols
-  ${mkIfHostname filterSubvolumes}   # remove subvols not starting with mntPoint + origin path
-  declare -a mounts
-  ${mkIfHostname loadMounts}
+  declare -a realpaths
+  ${mkIfHostname filterSubvolumes}
+  ${mkIfHostname loadFiles}
+  declare -a cfgpaths
+  ${mkIfHostname loadCfgPaths}
 
-  echo no matching subvol:
+  echo missing real path:
   ${coreutils}/bin/comm -13 \
-    <(${coreutils}/bin/printf '%s\n' "''${subvols[@]}" | ${coreutils}/bin/sort) \
-    <(${coreutils}/bin/printf '%s\n' "''${mounts[@]}" | ${coreutils}/bin/sort)
+    <(${coreutils}/bin/printf '%s\n' "''${realpaths[@]}" | ${coreutils}/bin/sort) \
+    <(${coreutils}/bin/printf '%s\n' "''${cfgpaths[@]}" | ${coreutils}/bin/sort)
 
   echo
-  echo unused btrfs subvols:
+  echo real path not in cfg:
   ${coreutils}/bin/comm -23 \
-    <(${coreutils}/bin/printf '%s\n' "''${subvols[@]}" | ${coreutils}/bin/sort) \
-    <(${coreutils}/bin/printf '%s\n' "''${mounts[@]}" | ${coreutils}/bin/sort)
+    <(${coreutils}/bin/printf '%s\n' "''${realpaths[@]}" | ${coreutils}/bin/sort) \
+    <(${coreutils}/bin/printf '%s\n' "''${cfgpaths[@]}" | ${coreutils}/bin/sort)
 ''
